@@ -1,0 +1,6 @@
+alpha: 0.05
+sesoi_balanced_accuracy: 0.02
+primary_correction: holm
+secondary_correction: benjamini_hochberg
+bootstrap_replicates: null
+paired_test_rule: paired_t_if_assumptions_pass_else_wilcoxon

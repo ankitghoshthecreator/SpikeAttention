@@ -1,0 +1,8 @@
+latency_repetitions: null
+latency_warmup: null
+batch_sizes: null
+energy:
+  kind: estimated
+  mac_joules: null
+  accumulate_joules: null
+  source: null

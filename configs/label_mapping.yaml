@@ -1,0 +1,9 @@
+class_order: [N, S, V, F, Q]
+symbol_to_class:
+  N: [N, L, R, e, j]
+  S: [A, a, J, S]
+  V: [V, E]
+  F: [F]
+  Q: [/, f, Q]
+non_beat_symbols: ["+", "|", "~", "!", "[", "]", ",", "'", "^", "x", "(", ")"]
+unmapped_policy: count_and_omit
