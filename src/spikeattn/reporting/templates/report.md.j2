@@ -1,0 +1,70 @@
+# Empirical Evaluation Report: SPIKE-ATTENTION
+
+**Subject**: Inferential Statistics and Predictive Analysis (ISPA)  
+**Run ID**: `{{ run_id }}`  
+**Generated (UTC)**: `{{ generated_utc }}`  
+**Primary Unit of Analysis**: `patient_group` (beats within patients are dependent clusters)
+
+---
+
+## 1. Executive Summary
+
+This report presents an empirical, end-to-end evaluation of the proposed **SPIKE-ATTENTION** (Spatio-Temporal Attention Spiking Neural Network, `st_snn`) against classical machine learning (`svm`) and deep neural network baselines (`cnn`, `rnn`, `plain_snn`) for five-class arrhythmia classification on two-channel ambulatory ECG.
+
+Evaluation strictly adheres to the pre-registered research integrity principles:
+1. **Disjoint Patient Splitting**: Validation and test sets share zero patient groups with training sets.
+2. **Cluster-Aware Statistical Unit**: Primary hypothesis tests and confidence intervals are computed at the patient group unit level.
+3. **Rigorous Multiplicity Control**: Family-wise error rate across primary model comparisons is controlled via the Holm step-down procedure.
+4. **Transparent Accounting**: Latency and memory are strictly reported as `measured`, while CMOS energy is reported as `estimated`.
+
+---
+
+## 2. Descriptive Performance Summary
+
+### Primary Metric: Balanced Accuracy by Model
+
+| Model | N (Patients) | Mean | Median | Std | IQR | Min | Max |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+{% for row in descriptive %}
+| `{{ row.model }}` | {{ row.n }} | {{ "%.4f"|format(row.mean) }} | {{ "%.4f"|format(row.median) }} | {{ "%.4f"|format(row.std) }} | {{ "%.4f"|format(row.iqr) }} | {{ "%.4f"|format(row.min) }} | {{ "%.4f"|format(row.max) }} |
+{% endfor %}
+
+---
+
+## 3. Inferential Hypothesis Testing
+
+### 3.1 Primary Family: ST-SNN versus Baselines (Balanced Accuracy)
+
+Primary hypotheses evaluate whether `st_snn` achieves superior balanced accuracy compared to each benchmark model on matched patient clusters ($H_0: \Delta \le 0 \text{ vs } H_1: \Delta > 0$, one-sided, $\alpha = 0.05$).
+
+| Comparison | Test Selected | Statistic | df | Raw $p$-value | Holm Adjusted $p$-value | Reject $H_0$? | Effect Size | Interpretation |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+{% for comp in comparisons %}
+| `st_snn` vs `{{ comp.baseline }}` | {{ comp.name }} | {{ "%.4f"|format(comp.statistic) }} | {{ comp.df if comp.df is not none else "N/A" }} | {{ "%.4e"|format(comp.p_value) }} | {{ "%.4e"|format(comp.assumptions.get('holm_corrected_p', comp.p_value)) }} | **{{ comp.assumptions.get('holm_reject_h0', comp.reject_h0) }}** | {{ "%.4f"|format(comp.effect_size) if comp.effect_size is not none else "N/A" }} | {{ comp.interpretation }} |
+{% endfor %}
+
+---
+
+## 4. Clustered Bootstrap Confidence Intervals
+
+95% Confidence Intervals for patient-level mean balanced accuracy derived via clustered bootstrap resampling (preserving intra-patient beat correlations):
+
+| Model | Point Estimate | 95% Bootstrap CI Lower | 95% Bootstrap CI Upper | Method |
+| :--- | :---: | :---: | :---: | :--- |
+{% for model, ci in intervals.items() %}
+| `{{ model }}` | {{ "%.4f"|format(ci.point) }} | {{ "%.4f"|format(ci.lower) }} | {{ "%.4f"|format(ci.upper) }} | Clustered Bootstrap ($B={{ ci.get('n_bootstrap', 2000) }}$) |
+{% endfor %}
+
+---
+
+## 5. Computational Efficiency and Hardware Accounting
+
+Empirical latency, memory overhead, and estimated energy dissipation per beat:
+
+| Model | Metric | Value | Unit | Designation (Kind) | Measurement Method |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+{% for eff in efficiency %}
+| `{{ eff.model }}` | {{ eff.metric }} | {{ "%.4f"|format(eff.get('median', eff.get('value', 0.0))) }} | {{ eff.unit }} | `{{ eff.kind }}` | {{ eff.get('method', 'Standard') }} |
+{% endfor %}
+
+> **Note on Energy Reporting**: Energy consumption is designated as `estimated` derived from Horowitz 28nm/45nm CMOS benchmark models (4.6 pJ/MAC, 0.9 pJ/SynOp). It is not directly measured on silicon.
