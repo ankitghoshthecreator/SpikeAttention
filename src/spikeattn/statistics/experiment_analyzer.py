@@ -214,7 +214,7 @@ class ExperimentAnalyzer:
             if base_vals is None:
                 continue
 
-            aligned_snn, aligned_base = self._align_paired(snn_vals, base_vals)
+            aligned_snn, aligned_base = self._aligned_pair(_SNN_MODEL, baseline, metric)
             diffs = aligned_snn - aligned_base
             if len(diffs) < 3:
                 results[baseline] = {"skipped": True, "reason": f"n={len(diffs)} < 3"}
@@ -252,8 +252,8 @@ class ExperimentAnalyzer:
 
         hyp = Hypothesis(
             h0_text="No difference in balanced accuracy between ST-SNN and baseline.",
-            h1_text="ST-SNN has higher balanced accuracy than baseline.",
-            tail="greater",
+            h1_text="ST-SNN and baseline differ in balanced accuracy.",
+            tail="two-sided",
             alpha=self._alpha,
         )
 
@@ -263,7 +263,7 @@ class ExperimentAnalyzer:
                 logger.info("Baseline '%s' absent; skipping comparison.", baseline)
                 continue
 
-            aligned_snn, aligned_base = self._align_paired(snn_vals, base_vals)
+            aligned_snn, aligned_base = self._aligned_pair(_SNN_MODEL, baseline, metric)
             diffs = aligned_snn - aligned_base
             if len(diffs) < 3:
                 logger.info("Too few pairs (%d) for '%s'; skipping.", len(diffs), baseline)
@@ -349,6 +349,9 @@ class ExperimentAnalyzer:
         if not common_ids or len(common_ids) < 3:
             return None
 
+        if len(common_ids) != min(len(v) for _, v in vectors):
+            logger.info("Friedman test uses %d matched patients across %d available models.", len(common_ids), len(vectors))
+
         common_ids_sorted = sorted(common_ids)
         groups = [
             vec_map[m].reindex(common_ids_sorted).to_numpy(dtype=np.float64)
@@ -394,7 +397,8 @@ class ExperimentAnalyzer:
                 "upper": upper,
                 "level": self._ci_level,
                 "method": "bootstrap",
-                "n": int(len(vals)),
+            "n": int(len(vals)),
+                "n_bootstrap": self._n_bootstrap,
             }
 
         return ci_results
@@ -420,7 +424,7 @@ class ExperimentAnalyzer:
             if base_vals is None:
                 continue
 
-            aligned_snn, aligned_base = self._align_paired(snn_vals, base_vals)
+            aligned_snn, aligned_base = self._aligned_pair(_SNN_MODEL, baseline, metric)
             diffs = aligned_snn - aligned_base
             if len(diffs) < 3:
                 continue
@@ -575,12 +579,15 @@ class ExperimentAnalyzer:
         relations = self.relationships()
         eff_summary = self.efficiency()
 
+        posthoc = self.post_hoc_friedman(friedman)
         bundle: dict[str, Any] = {
             "descriptive": descriptive_df.to_dict(orient="records"),
             "assumptions": assumptions,
             "comparisons": [r.to_dict() for r in comparisons],
             "friedman": friedman.to_dict() if friedman is not None else None,
+            "posthoc": posthoc,
             "intervals": cis,
+            "paired_difference_intervals": self.paired_difference_intervals(),
             "effects": effs,
             "corrections": corrections,
             "relationships": relations,
@@ -666,3 +673,38 @@ class ExperimentAnalyzer:
             snn_s.reindex(common).to_numpy(dtype=np.float64),
             base_s.reindex(common).to_numpy(dtype=np.float64),
         )
+
+    def _aligned_pair(self, model_a: str, model_b: str, metric: str) -> tuple[np.ndarray, np.ndarray]:
+        """Align model outcomes explicitly by patient group ID."""
+        def by_patient(model: str) -> pd.Series:
+            return (self._per_patient[self._per_patient[_COL_MODEL] == model]
+                    .groupby(_COL_PATIENT_GROUP)[metric].mean())
+        a, b = by_patient(model_a), by_patient(model_b)
+        common = sorted(set(a.index) & set(b.index))
+        return a.reindex(common).to_numpy(dtype=np.float64), b.reindex(common).to_numpy(dtype=np.float64)
+
+    def post_hoc_friedman(self, result: TestResult | None) -> list[dict[str, Any]]:
+        """Run matched Wilcoxon pairwise post-hoc tests only after a significant omnibus test."""
+        if result is None or result.p_value >= self._alpha:
+            return []
+        models = [_SNN_MODEL] + list(_BASELINE_MODELS)
+        vectors = {m: self._per_patient[self._per_patient[_COL_MODEL] == m]
+                   .groupby(_COL_PATIENT_GROUP)[self._primary_metric].mean() for m in models}
+        common = sorted(set.intersection(*(set(v.index) for v in vectors.values())))
+        matrix = np.column_stack([vectors[m].reindex(common).to_numpy(dtype=np.float64) for m in models])
+        return FriedmanTest().post_hoc(matrix, models, method="holm").to_dict(orient="records")
+
+    def paired_difference_intervals(self) -> dict[str, dict[str, Any]]:
+        """Bootstrap mean matched patient-level balanced-accuracy differences."""
+        output: dict[str, dict[str, Any]] = {}
+        for baseline in _BASELINE_MODELS:
+            a, b = self._aligned_pair(_SNN_MODEL, baseline, self._primary_metric)
+            diffs = a - b
+            if len(diffs) < 2:
+                continue
+            lower, upper = ConfidenceIntervalEstimator.bootstrap(
+                diffs, stat_fn=np.mean, B=self._n_bootstrap, level=self._ci_level, seed=self._seed)
+            output[baseline] = {"mean_difference": float(np.mean(diffs)), "lower": lower, "upper": upper,
+                                "n_patients": int(len(diffs)), "method": "paired patient bootstrap percentile",
+                                "n_bootstrap": self._n_bootstrap}
+        return output

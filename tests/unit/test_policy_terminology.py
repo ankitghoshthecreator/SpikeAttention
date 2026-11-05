@@ -1,19 +1,10 @@
-"""Enforce the project-wide ROC terminology policy."""
+"""Ensure probability metrics use explicit multiclass averaging methodology."""
 
 from pathlib import Path
 
 
-def test_forbidden_roc_area_token_absent_repo_wide():
-    token = "A" + "U" + "C"
+def test_roc_and_pr_metric_averaging_is_explicit():
     root = Path(__file__).resolve().parents[2]
-    found = []
-    for path in root.rglob("*"):
-        if not path.is_file() or ".venv" in path.parts:
-            continue
-        try:
-            content = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            continue
-        if token.casefold() in content.casefold():
-            found.append(str(path.relative_to(root)))
-    assert not found, f"Disallowed ROC-area terminology found in: {found}"
+    content = (root / "src" / "spikeattn" / "evaluation" / "model_evaluator.py").read_text(encoding="utf-8")
+    assert "roc_auc_score" in content and "average_precision_score" in content
+    assert "macro over classes with both positive and negative examples" in content

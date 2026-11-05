@@ -30,6 +30,8 @@ class ReportBuilder:
         analysis_bundle: dict[str, Any],
         output_path: Path | str,
         run_id: str = "run_ispa",
+        validation_metrics: list[dict[str, Any]] | None = None,
+        test_metrics: list[dict[str, Any]] | None = None,
     ) -> Path:
         """Render the complete report document to disk.
 
@@ -44,8 +46,13 @@ class ReportBuilder:
         template = self.env.get_template("report.md.j2")
 
         context = dict(analysis_bundle)
+        context.setdefault("paired_difference_intervals", {})
+        context.setdefault("posthoc", [])
+        context.setdefault("friedman", None)
         context["run_id"] = run_id
         context["generated_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        context["validation_metrics"] = validation_metrics or []
+        context["test_metrics"] = test_metrics or []
 
         # Normalize comparisons for template iteration if baseline is not explicitly keyed
         comparisons_norm = []

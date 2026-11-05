@@ -42,6 +42,8 @@ def mini_env(tmp_path):
             "record_id": pg.replace("mitdb:", ""),
             "patient_group_id": pg,
             "label": labels[i],
+            "class_id": labels[i],
+            "y_true": labels[i],
             "sample_index": i * 360,
         })
     meta_df = pd.DataFrame(meta_rows)
@@ -121,8 +123,10 @@ class TestEndToEndPipeline:
         )
 
         assert run_dir.exists()
-        assert (run_dir / "predictions" / "svm_seed0.csv").exists()
-        assert (run_dir / "predictions" / "cnn_seed0.csv").exists()
+        assert (run_dir / "predictions" / "test" / "svm_seed0.csv").exists()
+        assert (run_dir / "predictions" / "test" / "cnn_seed0.csv").exists()
+        assert (run_dir / "predictions" / "validation" / "svm_seed0.csv").exists()
+        assert (run_dir / "predictions" / "validation" / "cnn_seed0.csv").exists()
         assert (run_dir / "metrics" / "per_patient.csv").exists()
         assert (run_dir / "metrics" / "per_fold.csv").exists()
         assert (run_dir / "efficiency" / "measurements.csv").exists()

@@ -103,7 +103,11 @@ class SVMBaseline(BaseModel):
 
         # Handle class calibration
         self.clf.fit(X_scaled, y_arr)
-        self.calibrated = CalibratedClassifierCV(self.clf, cv="prefit")
+        try:
+            from sklearn.frozen import FrozenEstimator
+            self.calibrated = CalibratedClassifierCV(FrozenEstimator(self.clf))
+        except (ImportError, AttributeError):
+            self.calibrated = CalibratedClassifierCV(self.clf, cv="prefit")
         self.calibrated.fit(X_scaled, y_arr)
         self._fitted = True
         return self
@@ -135,4 +139,42 @@ class SVMBaseline(BaseModel):
         return np.argmax(probs, axis=-1).astype(np.int64)
 
     def count_parameters(self) -> int:
+        """Return 0: SVM has no gradient parameters.
+
+        Use count_support_vectors() for the computed weight memory footprint.
+        """
         return 0
+
+    def count_support_vectors(self) -> int:
+        """Return total number of support vectors across all calibrated sub-classifiers.
+
+        Used by EfficiencyProfiler to compute weight memory as:
+            n_support_vectors * n_features_in_ * 4 bytes (float32).
+        Returns 0 if the model is not yet fitted.
+        """
+        if not self._fitted or self.calibrated is None:
+            return 0
+        total_sv = 0
+        # CalibratedClassifierCV wraps one or more calibrated classifiers.
+        # Each calibrated estimator exposes the base estimator via .estimator.
+        try:
+            for cal in self.calibrated.calibrated_classifiers_:
+                estimator = getattr(cal, "estimator", None)
+                if estimator is not None and hasattr(estimator, "coef_"):
+                    total_sv += int(estimator.coef_.shape[1])  # SGDClassifier coef_: (n_classes, n_features)
+        except AttributeError:
+            pass
+        return total_sv
+
+    @property
+    def n_features_in_(self) -> int:
+        """Number of input features after extraction and scaling.
+
+        Required by EfficiencyProfiler for weight memory calculation.
+        """
+        if not self._fitted or self.calibrated is None:
+            return 0
+        try:
+            return int(self.scaler.n_features_in_)
+        except AttributeError:
+            return 0

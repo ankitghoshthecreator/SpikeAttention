@@ -11,11 +11,7 @@
 
 This report presents an empirical, end-to-end evaluation of the proposed **SPIKE-ATTENTION** (Spatio-Temporal Attention Spiking Neural Network, `st_snn`) against classical machine learning (`svm`) and deep neural network baselines (`cnn`, `rnn`, `plain_snn`) for five-class arrhythmia classification on two-channel ambulatory ECG.
 
-Evaluation strictly adheres to the pre-registered research integrity principles:
-1. **Disjoint Patient Splitting**: Validation and test sets share zero patient groups with training sets.
-2. **Cluster-Aware Statistical Unit**: Primary hypothesis tests and confidence intervals are computed at the patient group unit level.
-3. **Rigorous Multiplicity Control**: Family-wise error rate across primary model comparisons is controlled via the Holm step-down procedure.
-4. **Transparent Accounting**: Latency and memory are strictly reported as `measured`, while CMOS energy is reported as `estimated`.
+Evaluation uses patient-grouped train, validation and held-out fold partitions. Validation metrics support early stopping; test metrics are reported only after fitting. Statistical observations are patient groups. Cross-validation fold test sets are held-out within each fold; their pooled out-of-fold predictions are not an independent external test set. No superiority claim is made without multiplicity-adjusted evidence.
 
 ---
 
@@ -35,7 +31,7 @@ Evaluation strictly adheres to the pre-registered research integrity principles:
 
 ### 3.1 Primary Family: ST-SNN versus Baselines (Balanced Accuracy)
 
-Primary hypotheses evaluate whether `st_snn` achieves superior balanced accuracy compared to each benchmark model on matched patient clusters ($H_0: \Delta \le 0 \text{ vs } H_1: \Delta > 0$, one-sided, $\alpha = 0.05$).
+Exploratory two-sided paired comparisons evaluate balanced accuracy on matched patient groups ($H_0: \Delta = 0$, $\alpha = 0.05$). Holm correction controls the family-wise error rate across the four ST-SNN comparisons.
 
 | Comparison | Test Selected | Statistic | df | Raw $p$-value | Holm Adjusted $p$-value | Reject $H_0$? | Effect Size | Interpretation |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -43,21 +39,59 @@ Primary hypotheses evaluate whether `st_snn` achieves superior balanced accuracy
 | `st_snn` vs `{{ comp.baseline }}` | {{ comp.name }} | {{ "%.4f"|format(comp.statistic) }} | {{ comp.df if comp.df is not none else "N/A" }} | {{ "%.4e"|format(comp.p_value) }} | {{ "%.4e"|format(comp.assumptions.get('holm_corrected_p', comp.p_value)) }} | **{{ comp.assumptions.get('holm_reject_h0', comp.reject_h0) }}** | {{ "%.4f"|format(comp.effect_size) if comp.effect_size is not none else "N/A" }} | {{ comp.interpretation }} |
 {% endfor %}
 
+{% if friedman %}
+Matched Friedman omnibus test: statistic={{ "%.4f"|format(friedman.statistic) }}, df={{ friedman.df }}, p={{ "%.4e"|format(friedman.p_value) }}, N={{ friedman.n }} patient groups. Kendall's W={{ "%.4f"|format(friedman.effect_size) }}.
+{% if posthoc %}
+Significant omnibus result; Holm-adjusted paired post-hoc comparisons:
+
+| Model A | Model B | Mean difference | Raw p | Adjusted p | Reject |
+|---|---|---:|---:|---:|---|
+{% for row in posthoc %}
+| {{ row.model_a }} | {{ row.model_b }} | {{ "%.4f"|format(row.mean_diff) }} | {{ "%.4e"|format(row.raw_p_value) }} | {{ "%.4e"|format(row.adjusted_p_value) }} | {{ row.reject_h0 }} |
+{% endfor %}
+{% endif %}
+{% else %}
+Friedman omnibus test unavailable (insufficient matched models or observations).
+{% endif %}
+
 ---
 
 ## 4. Clustered Bootstrap Confidence Intervals
 
-95% Confidence Intervals for patient-level mean balanced accuracy derived via clustered bootstrap resampling (preserving intra-patient beat correlations):
+95% percentile bootstrap confidence intervals resample patient-level observations (B is reported below). These intervals describe the observed patient sample and do not remove between-patient uncertainty.
 
 | Model | Point Estimate | 95% Bootstrap CI Lower | 95% Bootstrap CI Upper | Method |
 | :--- | :---: | :---: | :---: | :--- |
 {% for model, ci in intervals.items() %}
-| `{{ model }}` | {{ "%.4f"|format(ci.point) }} | {{ "%.4f"|format(ci.lower) }} | {{ "%.4f"|format(ci.upper) }} | Clustered Bootstrap ($B={{ ci.get('n_bootstrap', 2000) }}$) |
+| `{{ model }}` | {{ "%.4f"|format(ci.point) }} | {{ "%.4f"|format(ci.lower) }} | {{ "%.4f"|format(ci.upper) }} | Patient-level percentile bootstrap ($B={{ ci.get('n_bootstrap', 2000) }}, N={{ ci.n }}) |
+{% endfor %}
+
+Paired patient bootstrap intervals for ST-SNN minus each baseline:
+
+| Baseline | Mean difference | 95% CI | Matched patients |
+|---|---:|---:|---:|
+{% for model, ci in paired_difference_intervals.items() %}
+| {{ model }} | {{ "%.4f"|format(ci.mean_difference) }} | [{{ "%.4f"|format(ci.lower) }}, {{ "%.4f"|format(ci.upper) }}] | {{ ci.n_patients }} |
 {% endfor %}
 
 ---
 
-## 5. Computational Efficiency and Hardware Accounting
+## 5. Split-specific classification metrics
+
+Validation metrics are for model selection/early stopping. The table below reports held-out test predictions separately for each seed and fold. Macro ROC-AUC and macro PR-AUC are one-vs-rest macro means over classes with both positive and negative examples; undefined classes are listed. Per-class metrics and supports are in `metrics/test_per_class.csv`.
+
+| Split | Model | Seed | Fold | N beats | Accuracy | Balanced accuracy | Macro precision | Macro recall | Macro F1 | Weighted precision | Weighted recall | Weighted F1 | Macro ROC-AUC OVR | Macro PR-AUC |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+{% for row in validation_metrics %}
+| Validation | {{ row.model }} | {{ row.seed }} | {{ row.fold }} | {{ row.n_beats }} | {{ "%.4f"|format(row.accuracy) }} | {{ "%.4f"|format(row.balanced_accuracy) }} | {{ "%.4f"|format(row.macro_precision) }} | {{ "%.4f"|format(row.macro_recall) }} | {{ "%.4f"|format(row.macro_f1) }} | {{ "%.4f"|format(row.weighted_precision) }} | {{ "%.4f"|format(row.weighted_recall) }} | {{ "%.4f"|format(row.weighted_f1) }} | {{ "%.4f"|format(row.macro_roc_auc_ovr) if row.macro_roc_auc_ovr is not none else "NA" }} | {{ "%.4f"|format(row.macro_pr_auc) if row.macro_pr_auc is not none else "NA" }} |
+{% endfor %}
+{% for row in test_metrics %}
+| Test | {{ row.model }} | {{ row.seed }} | {{ row.fold }} | {{ row.n_beats }} | {{ "%.4f"|format(row.accuracy) }} | {{ "%.4f"|format(row.balanced_accuracy) }} | {{ "%.4f"|format(row.macro_precision) }} | {{ "%.4f"|format(row.macro_recall) }} | {{ "%.4f"|format(row.macro_f1) }} | {{ "%.4f"|format(row.weighted_precision) }} | {{ "%.4f"|format(row.weighted_recall) }} | {{ "%.4f"|format(row.weighted_f1) }} | {{ "%.4f"|format(row.macro_roc_auc_ovr) if row.macro_roc_auc_ovr is not none else "NA" }} | {{ "%.4f"|format(row.macro_pr_auc) if row.macro_pr_auc is not none else "NA" }} |
+{% endfor %}
+
+---
+
+## 6. Computational Efficiency and Hardware Accounting
 
 Empirical latency, memory overhead, and estimated energy dissipation per beat:
 
@@ -67,4 +101,8 @@ Empirical latency, memory overhead, and estimated energy dissipation per beat:
 | `{{ eff.model }}` | {{ eff.metric }} | {{ "%.4f"|format(eff.get('median', eff.get('value', 0.0))) }} | {{ eff.unit }} | `{{ eff.kind }}` | {{ eff.get('method', 'Standard') }} |
 {% endfor %}
 
-> **Note on Energy Reporting**: Energy consumption is designated as `estimated` derived from Horowitz 28nm/45nm CMOS benchmark models (4.6 pJ/MAC, 0.9 pJ/SynOp). It is not directly measured on silicon.
+> Process RSS includes the Python process and loaded libraries; peak RSS is sampled every 5 ms and may miss short allocation spikes. Neural weight memory assumes float32 and does not include all runtime buffers; sklearn state arrays use their stored byte sizes. CMOS energy is estimated by a simplified operation-count model and is not measured on hardware.
+
+## 7. Limitations
+
+Fold test estimates are correlated across the cross-validation design and should not be treated as independent external validation. Small numbers of patient groups limit inferential power. Undefined probability metrics are explicitly reported as unavailable when a class has no positive or no negative examples.

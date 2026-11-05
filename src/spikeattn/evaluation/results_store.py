@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +41,10 @@ class ResultsStore:
 
     def is_fold_completed(self, model: str, seed: int, fold: int) -> bool:
         """Check if predictions for the given (model, seed, fold) already exist."""
-        pred_file = self.predictions_dir / f"{model}_seed{seed}.csv"
+        pred_file = self.predictions_dir / "test" / f"{model}_seed{seed}.csv"
+        if not pred_file.exists():
+            legacy_file = self.predictions_dir / f"{model}_seed{seed}.csv"
+            pred_file = legacy_file if legacy_file.exists() else pred_file
         if not pred_file.exists():
             return False
         try:
@@ -49,9 +53,13 @@ class ResultsStore:
         except Exception:
             return False
 
-    def save_predictions(self, bundle: PredictionBundle) -> Path:
-        """Save out-of-fold prediction records into predictions/<model>_seed<seed>.csv."""
-        pred_file = self.predictions_dir / f"{bundle.model_name}_seed{bundle.seed}.csv"
+    def save_predictions(self, bundle: PredictionBundle, split: str = "test") -> Path:
+        """Save validation or held-out test predictions without mixing split roles."""
+        if split not in {"validation", "test"}:
+            raise ValueError(f"Unknown prediction split: {split}")
+        split_dir = self.predictions_dir / split
+        split_dir.mkdir(parents=True, exist_ok=True)
+        pred_file = split_dir / f"{bundle.model_name}_seed{bundle.seed}.csv"
         new_df = bundle.to_dataframe()
 
         if pred_file.exists():
@@ -65,16 +73,57 @@ class ResultsStore:
 
         return pred_file
 
+    def save_classification_artifacts(self, split: str, summary: dict[str, Any], per_class: pd.DataFrame,
+                                      confusion: pd.DataFrame, curves: dict[str, Any]) -> None:
+        """Persist split-scoped metrics, class details, confusion matrices and probability curves."""
+        if split not in {"validation", "test"}:
+            raise ValueError(f"Unknown evaluation split: {split}")
+        self._append_or_write(self.metrics_dir / f"{split}_metrics.csv", pd.DataFrame([summary]),
+                              ["model", "seed", "fold"])
+        classes = per_class.copy()
+        for key in ("model", "seed", "fold"):
+            classes[key] = summary[key]
+        self._append_or_write(self.metrics_dir / f"{split}_per_class.csv", classes,
+                              ["model", "seed", "fold", "class"])
+        conf = confusion.copy()
+        conf["model"], conf["seed"], conf["fold"] = summary["model"], summary["seed"], summary["fold"]
+        self._append_or_write(self.metrics_dir / f"{split}_confusion_matrices.csv", conf,
+                              ["model", "seed", "fold", "true_class"])
+        curve_dir = self.run_dir / "probability_metrics" / split
+        curve_dir.mkdir(parents=True, exist_ok=True)
+        path = curve_dir / f"{summary['model']}_seed{summary['seed']}_fold{summary['fold']}.json"
+        def finite_values(value):
+            if isinstance(value, dict): return {k: finite_values(v) for k, v in value.items()}
+            if isinstance(value, list): return [finite_values(v) for v in value]
+            if isinstance(value, float) and not math.isfinite(value): return None
+            return value
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(finite_values(curves), f, indent=2, allow_nan=False)
+
     def _append_or_write(self, path: Path, df: pd.DataFrame, dedup_cols: list[str]) -> None:
-        """Write DataFrame or append without duplicate primary keys."""
+        """Write DataFrame or append without duplicate primary keys.
+
+        Deduplication removes existing rows whose *composite* key (all dedup_cols
+        together) matches any row in the incoming DataFrame.  Each column is compared
+        independently only within the context of the full key — this avoids the
+        mistake of treating each column as an independent filter, which would remove
+        rows from other models when they share the same seed/fold values.
+        """
         if path.exists():
             existing = pd.read_csv(path)
-            # Filter out overlapping records
-            mask = pd.Series([True] * len(existing))
-            for col in dedup_cols:
-                if col in existing.columns and col in df.columns:
-                    mask = mask & (~existing[col].isin(df[col].unique()))
-            combined = pd.concat([existing[mask], df], ignore_index=True)
+            # Build a set of composite key tuples from the incoming DataFrame
+            valid_dedup_cols = [c for c in dedup_cols if c in existing.columns and c in df.columns]
+            if valid_dedup_cols:
+                incoming_keys: set[tuple] = set(
+                    df[valid_dedup_cols].itertuples(index=False, name=None)
+                )
+                # Keep existing rows whose composite key is NOT in the incoming set
+                keep_mask = ~existing[valid_dedup_cols].apply(
+                    lambda row: tuple(row) in incoming_keys, axis=1
+                )
+                combined = pd.concat([existing[keep_mask], df], ignore_index=True)
+            else:
+                combined = pd.concat([existing, df], ignore_index=True)
             combined.to_csv(path, index=False)
         else:
             df.to_csv(path, index=False)
@@ -104,14 +153,9 @@ class ResultsStore:
         return out
 
     def save_measurements(self, df: pd.DataFrame) -> Path:
-        """Append or write efficiency/measurements.csv."""
+        """Append or write efficiency/measurements.csv without duplicating model/seed/fold/metric combos."""
         out = self.efficiency_dir / "measurements.csv"
-        if out.exists():
-            existing = pd.read_csv(out)
-            combined = pd.concat([existing, df], ignore_index=True)
-            combined.to_csv(out, index=False)
-        else:
-            df.to_csv(out, index=False)
+        self._append_or_write(out, df, dedup_cols=["model", "seed", "fold", "metric"])
         return out
 
     def save_manifest(self, manifest: dict[str, Any]) -> Path:

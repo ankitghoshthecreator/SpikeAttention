@@ -46,3 +46,25 @@ class TestEfficiencyProfiler:
         assert len(param_rows) == 1
         assert param_rows["kind"].iloc[0] == "computed"
         assert param_rows["value"].iloc[0] > 0
+
+    def test_weight_memory_mb_present(self):
+        """weight_memory_mb must be emitted as a 'computed' metric."""
+        model = SpikeAttentionSNN()
+        sample_in = np.random.randn(2, 2, 360).astype(np.float32)
+
+        df = EfficiencyProfiler.profile_model(
+            model=model,
+            sample_input=sample_in,
+            seed=0,
+            fold=0,
+            n_warmup=1,
+            n_runs=2,
+            device="cpu",
+        )
+
+        wm_rows = df[df["metric"] == "weight_memory_mb"]
+        assert len(wm_rows) == 1, "weight_memory_mb metric must be present"
+        assert wm_rows["kind"].iloc[0] == "computed"
+        assert wm_rows["unit"].iloc[0] == "mb"
+        # Neural model with >0 params must have >0 weight memory
+        assert wm_rows["value"].iloc[0] > 0.0

@@ -77,7 +77,10 @@ class Trainer:
         criterion: nn.Module | None = None,
         grad_clip: float = 1.0,
     ) -> None:
-        self.device = torch.device(device if torch.cuda.is_available() or device == "cpu" else "cpu")
+        requested_device = torch.device(device)
+        if requested_device.type == "cuda" and not torch.cuda.is_available():
+            raise RuntimeError("CUDA was requested but is unavailable; refusing to silently run on CPU.")
+        self.device = requested_device
         self.criterion = criterion or nn.CrossEntropyLoss()
         self.grad_clip = grad_clip
 
