@@ -1,0 +1,177 @@
+﻿flowchart TD
+
+    CFG["configs/*.yaml<br/>dataset, models, experiment, analysis, efficiency"]
+
+    subgraph DATA["1. Dataset Management (src/data)"]
+        DL["MitdbDownloader<br/>WFDB download"]
+        CAT["RecordCatalog<br/>CSV metadata"]
+        LM["LabelMapper<br/>beat symbol to AAMI class"]
+        PS["PatientSplitter<br/>patient group assignment"]
+    end
+
+    subgraph PRE["2. Preprocessing (src/preprocessing)"]
+        BP["BandpassFilter<br/>0.5-40 Hz Butterworth"]
+        NORM["LeadNormalizer<br/>fit on train patients only"]
+        SEG["BeatSegmenter<br/>beat-centred windows"]
+    end
+
+    subgraph ENC["3. Spike Encoding (src/encoding)"]
+        BENC["BaseSpikeEncoder"]
+        DENC["DeltaSpikeEncoder<br/>ON and OFF spikes"]
+    end
+
+    subgraph MODELS["4. Models (src/models)"]
+        BM["BaseModel"]
+        subgraph SNNPKG["Proposed ST-SNN"]
+            LIF["SpikingConv1d + LIF<br/>surrogate gradient"]
+            TA["TemporalAttention"]
+            ILA["InterLeadAttention"]
+            HEAD["Pooling + FC + Softmax"]
+        end
+        PSNN["PlainSNN<br/>no attention"]
+        CNN["CNNBaseline"]
+        RNN["RNNBaseline"]
+        SVM["SVMBaseline"]
+    end
+
+    subgraph TRAIN["5. Training (src/training)"]
+        TR["Trainer<br/>weighted cross-entropy, early stopping"]
+        HPO["HyperparameterTuner<br/>validation only"]
+    end
+
+    subgraph PRED["6. Predictive Evaluation (src/prediction, src/evaluation)"]
+        CV["PatientGroupCrossValidator<br/>repeated stratified group K-fold"]
+        PR["Predictor<br/>probabilities and labels"]
+        ME["ModelEvaluator"]
+        CM["ClassificationMetrics<br/>TP TN FP FN, F1, macro-F1"]
+        ROC["ROCAnalyzer<br/>ROC Curve, AU one-vs-rest"]
+        EP["EfficiencyProfiler<br/>latency, memory, spikes, MACs, SynOps"]
+    end
+
+    STORE[("ResultsStore<br/>results/run_id: predictions, metrics, efficiency")]
+
+    subgraph ISPA["7. Inferential Statistics (src/statistics)"]
+        EA["ExperimentAnalyzer<br/>central workflow"]
+        DS["DescriptiveStatistics"]
+        AT["AssumptionTester<br/>Shapiro-Wilk, Levene, outliers"]
+        TS["TestSelector<br/>pre-specified rules"]
+        HT["HypothesisTester<br/>H0, H1, alpha, power"]
+        subgraph TESTS["BaseStatisticalTest subclasses"]
+            TT["ttest.py<br/>one-sample, independent, Welch, paired, corrected"]
+            NP["nonparametric_tests.py<br/>Wilcoxon, Friedman, Kruskal-Wallis"]
+            MC["mcnemar_test.py<br/>McNemarTest"]
+            CH["chi_square.py<br/>ChiSquareTest"]
+            AN["anova.py<br/>one-way, repeated-measures"]
+        end
+        CI["ConfidenceIntervalEstimator<br/>Wilson, normal, clustered bootstrap"]
+        ES["EffectSizeAnalyzer<br/>Cohen d, Hedges g, rank-biserial"]
+        MCC["MultipleComparisonCorrector<br/>Bonferroni, Holm, Benjamini-Hochberg"]
+        COR["CorrelationAnalyzer<br/>Pearson, Spearman"]
+        REG["RegressionAnalyzer<br/>simple and multiple OLS"]
+        EFF["EfficiencyAnalyzer<br/>measured vs estimated"]
+        INT["Interpretation engine<br/>rule-based text from results"]
+    end
+
+    subgraph OUT["8. Visualization and Reporting"]
+        VIZ["Plotters<br/>histograms, box, violin, confusion matrix, ROC, heatmap, regression, CI, effect size, p-values, efficiency"]
+        REP["ReportBuilder<br/>CSV, JSON, PNG, Markdown report"]
+    end
+
+    CLI["main.py CLI<br/>data, experiment, analyze, report"]
+
+    CLI --> CFG
+    CFG --> DL
+    DL --> CAT
+    CAT --> LM
+    LM --> PS
+    PS --> BP
+    BP --> NORM
+    NORM --> SEG
+    SEG --> BENC
+    BENC --> DENC
+
+    DENC --> LIF
+    LIF --> TA
+    TA --> ILA
+    ILA --> HEAD
+    DENC --> PSNN
+    SEG --> CNN
+    SEG --> RNN
+    SEG --> SVM
+
+    BM -.-> HEAD
+    BM -.-> PSNN
+    BM -.-> CNN
+    BM -.-> RNN
+    BM -.-> SVM
+
+    PS --> CV
+    CV --> HPO
+    HPO --> TR
+    TR --> HEAD
+    TR --> PSNN
+    TR --> CNN
+    TR --> RNN
+    TR --> SVM
+
+    HEAD --> PR
+    PSNN --> PR
+    CNN --> PR
+    RNN --> PR
+    SVM --> PR
+    PR --> ME
+    ME --> CM
+    ME --> ROC
+    HEAD --> EP
+    PSNN --> EP
+    CNN --> EP
+    RNN --> EP
+    SVM --> EP
+
+    CM --> STORE
+    ROC --> STORE
+    PR --> STORE
+    EP --> STORE
+
+    STORE --> EA
+    EA --> DS
+    EA --> AT
+    AT --> TS
+    TS --> HT
+    HT --> TT
+    HT --> NP
+    HT --> MC
+    HT --> CH
+    HT --> AN
+    EA --> CI
+    EA --> ES
+    TT --> MCC
+    NP --> MCC
+    MC --> MCC
+    CH --> MCC
+    AN --> MCC
+    CI --> INT
+    ES --> INT
+    MCC --> INT
+    EA --> COR
+    EA --> REG
+    EA --> EFF
+    EA --> ROC
+    COR --> INT
+    REG --> INT
+    EFF --> INT
+    DS --> INT
+
+    INT --> REP
+    DS --> VIZ
+    AT --> VIZ
+    CI --> VIZ
+    ES --> VIZ
+    MCC --> VIZ
+    COR --> VIZ
+    REG --> VIZ
+    ROC --> VIZ
+    CM --> VIZ
+    EFF --> VIZ
+    VIZ --> REP
+    REP --> STORE

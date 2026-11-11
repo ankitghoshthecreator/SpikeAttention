@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import logging
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -94,6 +95,9 @@ class Trainer:
         weight_decay: float = 1e-4,
         patience: int = 5,
         class_weights: dict[int, int] | np.ndarray | None = None,
+        save_best_dirs: list[Path | str] | Path | str | None = None,
+        save_recent_dirs: list[Path | str] | Path | str | None = None,
+        model_filename: str = "model.pt",
     ) -> dict[str, Any]:
         """Train neural network model across specified epochs with validation monitoring.
 
@@ -106,10 +110,33 @@ class Trainer:
             weight_decay: L2 penalty for AdamW.
             patience: Early stopping patience epochs.
             class_weights: Class counts or weights for weighted cross-entropy.
+            save_best_dirs: Optional directories to persist best model checkpoints.
+            save_recent_dirs: Optional directories to persist recent model checkpoints.
+            model_filename: Filename for the model checkpoint (defaults to model.pt).
 
         Returns:
             Dictionary with training history: train_loss, val_loss, val_balanced_acc, best_epoch.
         """
+        def _to_dir_list(dirs: list[Path | str] | Path | str | None) -> list[Path]:
+            if dirs is None:
+                return []
+            if isinstance(dirs, (str, Path)):
+                return [Path(dirs)]
+            return [Path(d) for d in dirs]
+
+        best_dir_list = _to_dir_list(save_best_dirs)
+        recent_dir_list = _to_dir_list(save_recent_dirs)
+
+        def _save_to_dirs(target_dirs: list[Path], state: dict[str, Any]) -> None:
+            for d in target_dirs:
+                try:
+                    d.mkdir(parents=True, exist_ok=True)
+                    torch.save(state, d / "model.pt")
+                    if model_filename and model_filename != "model.pt":
+                        torch.save(state, d / model_filename)
+                except Exception as exc:
+                    logger.warning("Could not save checkpoint to %s: %s", d, exc)
+
         model = model.to(self.device)
 
         if class_weights is not None:
@@ -161,6 +188,10 @@ class Trainer:
             history["train_loss"].append(epoch_train_loss)
             scheduler.step()
 
+            # Save recent model state at end of epoch
+            if recent_dir_list:
+                _save_to_dirs(recent_dir_list, model.state_dict())
+
             # 2. Validation Phase
             if val_loader is not None:
                 val_metrics = self.evaluate(model, val_loader, criterion)
@@ -171,6 +202,8 @@ class Trainer:
                 improved = early_stopping.step(val_metrics["balanced_accuracy"], model)
                 if improved:
                     best_epoch = epoch
+                    if best_dir_list:
+                        _save_to_dirs(best_dir_list, model.state_dict())
 
                 logger.info(
                     "Epoch %d/%d - Train Loss: %.4f - Val Loss: %.4f - Val BalAcc: %.4f%s",
@@ -191,6 +224,10 @@ class Trainer:
         # Restore optimal checkpoint if validation was monitored
         if val_loader is not None and early_stopping.best_state is not None:
             early_stopping.restore_best(model)
+            if best_dir_list:
+                _save_to_dirs(best_dir_list, early_stopping.best_state)
+        elif best_dir_list:
+            _save_to_dirs(best_dir_list, model.state_dict())
 
         return {
             "history": history,

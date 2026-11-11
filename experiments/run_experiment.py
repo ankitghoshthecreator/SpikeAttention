@@ -211,11 +211,38 @@ def run_experiment(
 
                     epochs = epochs_override or (15 if model_name != "svm" else 1)
 
+                    # Target model persistence directories
+                    model_root = Path(__file__).resolve().parent.parent / "model"
+                    model_keys = [model_name]
+                    if model_name == "plain_snn":
+                        model_keys.append("snn")
+
+                    best_dirs = [model_root / "best" / k / "model" for k in model_keys]
+                    recent_dirs = [model_root / "recent" / k / "model" for k in model_keys]
+
                     if model_name == "svm":
                         model.fit(X_train, y_train)
+                        import joblib
+                        for d in best_dirs + recent_dirs:
+                            d.mkdir(parents=True, exist_ok=True)
+                            joblib.dump(model, d / "model.joblib")
+                            joblib.dump(model, d / "model.pkl")
+                            joblib.dump(model, d / f"model_seed{seed}_fold{fold}.joblib")
+                        logger.info("Saved SVM model to %s", [str(d) for d in best_dirs])
                     else:
-                        trainer.fit(model=model, train_loader=train_loader, val_loader=val_loader,
-                                    epochs=epochs, lr=1e-3, patience=4, class_weights=class_counts)
+                        trainer.fit(
+                            model=model,
+                            train_loader=train_loader,
+                            val_loader=val_loader,
+                            epochs=epochs,
+                            lr=1e-3,
+                            patience=4,
+                            class_weights=class_counts,
+                            save_best_dirs=best_dirs,
+                            save_recent_dirs=recent_dirs,
+                            model_filename=f"model_seed{seed}_fold{fold}.pt",
+                        )
+                        logger.info("Saved neural model %s to %s", model_name, [str(d) for d in best_dirs])
 
                 # Inference on test set
                     validation_bundle = Predictor.predict(

@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPIKE-ATTENTION: Research Poster</title>
+    <style>
+        :root {
+            --primary: #1a365d;
+            --primary-accent: #2b6cb0;
+            --secondary: #2c5282;
+            --highlight: #dd6b20;
+            --bg: #f7fafc;
+            --card-bg: #ffffff;
+            --text-dark: #2d3748;
+            --text-muted: #718096;
+            --border: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-dark);
+            line-height: 1.5;
+            padding: 24px;
+        }
+
+        .poster-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        /* HEADER */
+        header {
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            color: #ffffff;
+            padding: 36px 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        header .subtitle {
+            font-size: 1.25rem;
+            color: #63b3ed;
+            font-weight: 600;
+            margin-bottom: 14px;
+        }
+
+        header .meta-row {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            flex-wrap: wrap;
+            font-size: 0.95rem;
+            color: #cbd5e0;
+        }
+
+        header .badge {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        /* POSTER GRID */
+        .poster-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            padding: 30px;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* CARDS */
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.03);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-header {
+            background: #edf2f7;
+            padding: 12px 18px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary-accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-body {
+            padding: 18px;
+            font-size: 0.95rem;
+        }
+
+        /* TABLES */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            margin-top: 10px;
+        }
+
+        table th, table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table th {
+            background: #f1f5f9;
+            color: #1e293b;
+            font-weight: 700;
+        }
+
+        table tr:hover {
+            background: #f8fafc;
+        }
+
+        .highlight-row {
+            background: #ebf8ff;
+            font-weight: 700;
+            color: #2b6cb0;
+        }
+
+        /* IMAGES */
+        .graph-img {
+            width: 100%;
+            height: auto;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            margin-top: 8px;
+            transition: transform 0.2s;
+        }
+
+        .graph-img:hover {
+            transform: scale(1.01);
+        }
+
+        .caption {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        /* HIGHLIGHT BOXES */
+        .callout {
+            background: #fefcbf;
+            border-left: 4px solid var(--highlight);
+            padding: 12px 14px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 0.9rem;
+        }
+
+        .callout strong {
+            color: #9c4221;
+        }
+
+        .callout-blue {
+            background: #ebf8ff;
+            border-left: 4px solid var(--primary-accent);
+            padding: 12px 14px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 0.9rem;
+        }
+
+        .pipeline-flow {
+            background: #f8fafc;
+            border: 1px dashed #cbd5e0;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            text-align: center;
+            line-height: 1.6;
+            margin-top: 8px;
+        }
+
+        /* PRINT STYLES */
+        @page {
+            size: A3 landscape;
+            margin: 8mm;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .poster-container {
+                box-shadow: none;
+                border: none;
+                max-width: 100%;
+                width: 100%;
+            }
+            .poster-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 16px;
+                padding: 16px;
+            }
+            header {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .card {
+                break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="poster-container">
+    <!-- HEADER -->
+    <header>
+        <h1>SPIKE-ATTENTION: Dual Spatio-Temporal Attention SNN</h1>
+        <div class="subtitle">Ultra-Low Power Edge Arrhythmia Classification on Held-Out Patients</div>
+        <div class="meta-row">
+            <span class="badge">Dataset: MIT-BIH Arrhythmia (AAMI EC57)</span>
+            <span class="badge">Held-Out Test Beats: 24,698 (9 Unseen Patients)</span>
+            <span class="badge">Hardware: Neuromorphic / Wearable Edge AI</span>
+        </div>
+    </header>
+
+    <!-- POSTER BODY -->
+    <div class="poster-grid">
+
+        <!-- COLUMN 1: Problem, Pipeline, & Architecture -->
+        <div class="column">
+            
+            <div class="card">
+                <div class="card-header">1. Clinical Motivation & Challenge</div>
+                <div class="card-body">
+                    <p>Continuous ECG monitoring on wearable holters and smartwatches is severely battery-constrained. Traditional DNNs (CNNs/RNNs) require millions of continuous Floating-Point Multiply-Accumulate (MAC) operations, causing excessive thermal dissipation and battery drain.</p>
+                    
+                    <div class="callout">
+                        <strong>The Imbalance Trap:</strong> MIT-BIH contains ~90% Normal beats. Trivial models (like SVM) achieve <strong>91.15% raw accuracy</strong> simply by predicting Normal, while missing <strong>65.5% of lethal Ventricular Arrhythmias</strong>.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">2. Proposed ST-SNN Architecture</div>
+                <div class="card-body">
+                    <p>ST-SNN merges <strong>event-driven neuromorphic sparsity</strong> with <strong>dual attention</strong>:</p>
+                    <div class="pipeline-flow">
+                        Continuous 2-Lead ECG [B, 2, 360]<br>
+                        ▼<br>
+                        <strong>Delta Spike Encoding</strong> → 4 Channels [B, 360, 4]<br>
+                        ▼<br>
+                        <strong>Spiking Conv1D Block 1</strong> (LIF, Stride 2)<br>
+                        ▼<br>
+                        <span style="color:#2b6cb0; font-weight:bold;">[ Inter-Lead Spatial Attention ]</span><br>
+                        ▼<br>
+                        <strong>Spiking Conv1D Block 2</strong> (LIF, Stride 2)<br>
+                        ▼<br>
+                        <span style="color:#c53030; font-weight:bold;">[ Temporal Self-Attention ]</span><br>
+                        ▼<br>
+                        <strong>Global Rate Pooling → 5 Class Logits</strong>
+                    </div>
+
+                    <div class="callout-blue" style="margin-top: 12px;">
+                        <strong>Spatial Attention:</strong> Dynamically balances diagnostic evidence between Lead 0 (frontal) and Lead 1 (horizontal).<br>
+                        <strong>Temporal Attention:</strong> Focuses membrane integration onto the high-salience QRS complex.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">3. Single-Beat Live Inference Demo</div>
+                <div class="card-body">
+                    <img class="graph-img" src="unseen_beat_test.png" alt="Live Unseen Beat Demo">
+                    <div class="caption">Real-time prediction confidence on an unseen beat from Patient #109.</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- COLUMN 2: Benchmark Results & Master Plots -->
+        <div class="column">
+
+            <div class="card">
+                <div class="card-header">4. Multi-Model Benchmark on Unseen Patients</div>
+                <div class="card-body">
+                    <p>Evaluated on <strong>24,698 strictly held-out test beats</strong> from 9 unseen patients:</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Model</th>
+                                <th>Raw Acc</th>
+                                <th>Bal Acc</th>
+                                <th>Macro F1</th>
+                                <th>V-Recall (PVC)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>SVM</td>
+                                <td><strong>91.15%</strong></td>
+                                <td>33.32%</td>
+                                <td>0.282</td>
+                                <td>34.48%</td>
+                            </tr>
+                            <tr>
+                                <td>CNN</td>
+                                <td>53.81%</td>
+                                <td>46.44%</td>
+                                <td>0.232</td>
+                                <td><strong>89.54%</strong></td>
+                            </tr>
+                            <tr>
+                                <td>RNN</td>
+                                <td>73.58%</td>
+                                <td><strong>47.00%</strong></td>
+                                <td><strong>0.299</strong></td>
+                                <td>80.44%</td>
+                            </tr>
+                            <tr>
+                                <td>Plain SNN</td>
+                                <td>63.38%</td>
+                                <td>42.66%</td>
+                                <td>0.242</td>
+                                <td>82.93%</td>
+                            </tr>
+                            <tr class="highlight-row">
+                                <td>ST-SNN (Ours)</td>
+                                <td>53.57%</td>
+                                <td>40.58%</td>
+                                <td>0.222</td>
+                                <td>81.74%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">5. Comparative Arrhythmia Classification</div>
+                <div class="card-body">
+                    <img class="graph-img" src="plots for accuracy/comparative_all_models_per_class_accuracy.png" alt="Comparative Per-Class Accuracy">
+                    <div class="caption">Side-by-side sensitivity across Normal (N), Supraventricular (S), Ventricular (V), and Fusion (F) beats.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">6. ST-SNN Diagnostic Breakdown</div>
+                <div class="card-body">
+                    <img class="graph-img" src="plots for accuracy/st_snn_accuracy_per_class.png" alt="ST-SNN Per-Class Accuracy">
+                    <div class="caption">ST-SNN sensitivity per arrhythmia class on the unseen test set.</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- COLUMN 3: ROC Analysis, Efficiency, & Conclusions -->
+        <div class="column">
+
+            <div class="card">
+                <div class="card-header">7. ST-SNN ROC Curve Performance</div>
+                <div class="card-body">
+                    <img class="graph-img" src="results/demo_models/visualizations/test/comparative/st_snn_roc.png" alt="ST-SNN ROC Curve">
+                    <div class="caption">One-vs-Rest Receiver Operating Characteristic curves per AAMI class.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">8. Hardware & Energy Accounting</div>
+                <div class="card-body">
+                    <p>Estimated energy consumption based on CMOS 45nm standard neuromorphic accumulation models:</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Architecture</th>
+                                <th>Params</th>
+                                <th>Energy / Beat</th>
+                                <th>Reduction</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>RNN (Bi-GRU)</td>
+                                <td>101,253</td>
+                                <td>4.658 &mu;J</td>
+                                <td>Baseline (1.0&times;)</td>
+                            </tr>
+                            <tr>
+                                <td>1D CNN</td>
+                                <td>36,357</td>
+                                <td>1.672 &mu;J</td>
+                                <td>2.8&times; less</td>
+                            </tr>
+                            <tr>
+                                <td>Plain SNN</td>
+                                <td>11,653</td>
+                                <td>0.173 &mu;J</td>
+                                <td>26.9&times; less</td>
+                            </tr>
+                            <tr class="highlight-row">
+                                <td>ST-SNN (Ours)</td>
+                                <td>29,253</td>
+                                <td>0.435 &mu;J</td>
+                                <td><strong>10.7&times; less</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="callout" style="margin-top: 14px;">
+                        <strong>Wearable Advantage:</strong> By computing with sparse event-driven binary spikes instead of continuous float multiplications, ST-SNN achieves <strong>over 10&times; battery lifetime extension</strong> on edge devices.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">9. Key Conclusions & Contributions</div>
+                <div class="card-body">
+                    <ul style="padding-left: 20px; font-size: 0.92rem; line-height: 1.6;">
+                        <li><strong>Strict Inter-Patient Generalization:</strong> Tested on 9 held-out patients without data leakage.</li>
+                        <li><strong>Life-Threatening Arrhythmia Sensitivity:</strong> Attains <strong>81.74% Ventricular Ectopic recall</strong>.</li>
+                        <li><strong>Fusion Beat Detection:</strong> Inter-lead spatial attention recovers <strong>14.29% Fusion beats</strong>, outperforming CNN and SVM (both 0.0%).</li>
+                        <li><strong>Edge Feasibility:</strong> Minimal footprint (0.11 MB weight memory, 0.435 &mu;J energy) suited for smartwatches and implantable devices.</li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>

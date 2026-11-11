@@ -8,6 +8,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .env
+/model/
 data/raw/**
 data/processed/**
 data/metadata/**

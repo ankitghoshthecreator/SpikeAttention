@@ -71,7 +71,7 @@ class DeltaSpikeEncoder(BaseSpikeEncoder):
             raise RuntimeError("DeltaSpikeEncoder must be fitted before encode()")
 
         if isinstance(X, torch.Tensor):
-            signals = X.detach().cpu().to(torch.float32)
+            signals = X.detach().to(torch.float32)
         else:
             signals = torch.from_numpy(np.asarray(X, dtype=np.float32))
 
@@ -87,24 +87,23 @@ class DeltaSpikeEncoder(BaseSpikeEncoder):
             signals = signals[:, :, : self.target_len * step : step]
             L = signals.shape[-1]
 
-        # Vectorized or sequential delta modulation per lead
-        # Lead 0: ON, OFF; Lead 1: ON, OFF -> Total 4 channels
-        spikes = torch.zeros((B, L, 4), dtype=torch.float32)
+        # Fast vectorized delta modulation across batches and leads simultaneously
+        # Lead 0: ON (ch 0), OFF (ch 1); Lead 1: ON (ch 2), OFF (ch 3) -> Total 4 channels
+        spikes = torch.zeros((B, L, 4), dtype=torch.float32, device=signals.device)
+        ref = signals[:, :, 0]  # [B, 2]
 
-        # Sequential reference tracking per sample and channel
-        for b in range(B):
-            for lead in range(2):
-                ref = float(signals[b, lead, 0])
-                ch_on = lead * 2
-                ch_off = lead * 2 + 1
-                for t in range(1, L):
-                    val = float(signals[b, lead, t])
-                    diff = val - ref
-                    if diff >= th:
-                        spikes[b, t, ch_on] = 1.0
-                        ref = val
-                    elif diff <= -th:
-                        spikes[b, t, ch_off] = 1.0
-                        ref = val
+        for t in range(1, L):
+            val = signals[:, :, t]  # [B, 2]
+            diff = val - ref
+            on = diff >= th
+            off = diff <= -th
+
+            spikes[:, t, 0] = on[:, 0].to(torch.float32)
+            spikes[:, t, 1] = off[:, 0].to(torch.float32)
+            spikes[:, t, 2] = on[:, 1].to(torch.float32)
+            spikes[:, t, 3] = off[:, 1].to(torch.float32)
+
+            any_spike = on | off
+            ref = torch.where(any_spike, val, ref)
 
         return spikes
